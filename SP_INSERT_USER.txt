@@ -1,0 +1,48 @@
+CREATE DEFINER=`root`@`localhost` PROCEDURE `SP_INSERT_USER`(IN `i_s_UserId` VARCHAR(50), IN `i_s_EmailId` VARCHAR(50), IN `i_s_FirstName` CHAR(50), IN `i_s_Location` VARCHAR(50), IN `i_s_LastName` CHAR(50), IN `i_n_ContactNo` VARCHAR(50), IN `i_s_Password` VARCHAR(50), IN `i_s_Role` VARCHAR(50), IN `i_s_UpdtUserId` VARCHAR(50), IN `i_s_ServerId` VARCHAR(50)
+BEGIN
+DECLARE l_s_User_Exists_Flag VARCHAR(1);
+DECLARE l_s_From_User_Email VARCHAR(4000);
+DECLARE l_s_Add_User_Body VARCHAR(4000);
+DECLARE l_s_Add_User_Subject VARCHAR(4000);
+DECLARE l_s_User_Role VARCHAR(4000);
+DECLARE SEQ_EMAIL DOUBLE;
+DECLARE SEQ_MAX DOUBLE;
+SET l_s_User_Exists_Flag ='N';
+IF i_s_ServerId ='-QA' THEN
+SET l_s_Add_User_Body = PK_LSDB_EMAIL_CONTENT.o_s_Add_User_Body_QA;
+SET l_s_Add_User_Subject = PK_LSDB_EMAIL_CONTENT.o_s_Add_User_Subject_QA;
+ELSE
+SET l_s_Add_User_Body= PK_LSDB_EMAIL_CONTENT.o_s_Add_User_Body; 
+SET l_s_Add_User_Subject= PK_LSDB_EMAIL_CONTENT.o_s_Add_User_Subject; 
+END IF;
+SELECT 'Y' INTO l_s_User_Exists_Flag  FROM  LSDB010_EMD_USERS  a 
+WHERE UPPER(TRIM(a.LS010_USER_ID)) = UPPER(TRIM(i_s_UserId ));
+IF l_s_User_Exists_Flag ='N' THEN
+SELECT    LS010_EMAIL_ADDRESS INTO l_s_From_User_Email
+FROM  LSDB010_EMD_USERS
+WHERE LS010_USER_ID = i_s_UpdtUserId;
+SELECT LS120_ROLE_NAME INTO l_s_User_Role  FROM LSDB120_USER_ROLES
+WHERE LS120_ROLE_ID = i_s_Role;
+SELECT MAX(LS180_EMAIL_SEQ_NO) INTO SEQ_EMAIL FROM LSDB180_EMAIL_LOG ;
+SET SEQ_MAX = SEQ_EMAIL+1;
+set l_s_Add_User_Body=REPLACE(l_s_Add_User_Body,'<FN>',i_s_FirstName);
+set l_s_Add_User_Body=REPLACE(l_s_Add_User_Body,'<UR>',l_s_User_Role );
+set l_s_Add_User_Body=REPLACE(l_s_Add_User_Body,'<UN>',i_s_UserId);
+set l_s_Add_User_Body=REPLACE(l_s_Add_User_Body,'<PWD>',i_s_Password);
+INSERT INTO LSDB010_EMD_USERS (
+LS010_USER_ID,LS010_FIRSTNAME,LS010_LASTNAME,LS120_ROLE_ID,LS010_OLD_PWD,LS010_PWD,LS010_EMAIL_ADDRESS,LS010_LOC,
+LS010_CONTACT_NUMBER,LS010_UPDT_USER_ID,LS010_UPDT_DATE,LS010_CURR_LOGGEDIN,LS010_PREV_LOGGEDIN)
+VALUES (i_s_UserId,i_s_FirstName,i_s_LastName,i_s_Role-- ,RPAD(i_s_Password,(TRUNCATE(LENGTH(i_s_Password)/8)+1)*8,CHR(0))
+,i_s_Password,i_s_Password,i_s_EmailId,i_s_Location,i_n_ContactNo,i_s_UpdtUserId,SYSDATE(),NULL,NULL);
+INSERT INTO LSDB011_EMAIL_SUBSCRIPTIONS
+(LS010_USER_ID,LS011_ACTION_NOTICE,LS011_CC_NOTICE,LS011_INFO_NOTICE,LS011_UPDT_USER_ID,LS011_UPDT_DATE)
+VALUES (i_s_UserId,'Y','N','Y',i_s_UpdtUserId, sysdate());
+IF i_s_Role<>'DSBD' THEN
+INSERT INTO LSDB180_EMAIL_LOG(LS180_EMAIL_SEQ_NO,LS180_EMAIL_FROM_X,LS180_EMAIL_TO_X,LS180_EMAIL_SUBJECT_X,LS180_EMAIL_BODY_X,
+LS180_EMAIL_SENT_FLAG, LS180_EMAIL_TS, LS180_UPDT_USER_ID, LS180_UPDT_DATE) 
+VALUES(
+SEQ_MAX, l_s_From_User_Email,i_s_EmailId, l_s_Add_User_Subject
+,l_s_Add_User_Body,'N',SYSDATE(),i_s_UpdtUserId, SYSDATE());
+END IF;
+END IF;
+END

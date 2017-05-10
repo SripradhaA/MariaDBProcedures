@@ -1,0 +1,49 @@
+CREATE DEFINER=`root`@`localhost` PROCEDURE `SP_UPDATE_USER`(IN `i_s_UserId` VARCHAR(10), IN `i_s_EmailId` VARCHAR(40)
+      , IN `i_s_FirstName` CHAR(50) , IN `i_s_Location` VARCHAR(20) , IN `i_s_LastName` CHAR(50) , IN `i_n_ContactNo` VARCHAR(100) , IN `i_s_Role` VARCHAR(5)
+      , IN `i_s_UpdtUserId` VARCHAR(10) , OUT `o_n_LSDBErrorID` INT , OUT `o_s_OracleCode` VARCHAR(4000) , OUT `o_s_ErrorMessage` VARCHAR(4000))
+	
+BEGIN
+
+   DECLARE l_s_User_Role VARCHAR(25); 
+   DECLARE l_s_Role_ID VARCHAR(5);
+   DECLARE l_s_From_User_Email VARCHAR(40);
+   DECLARE l_s_Modify_User_Body LONGTEXT;
+   DECLARE l_s_Modify_User_Subject VARCHAR(4000);
+   DECLARE l_s_First_Name CHAR(50);
+   DECLARE l_s_Prev_Logged_Date DATETIME DEFAULT  NULL;
+   SET o_s_OracleCode = NULLIF(o_s_OracleCode,'');
+   SET o_s_ErrorMessage = NULLIF(o_s_ErrorMessage,'');
+   SET o_n_LSDBErrorID = PK_LSDB_CONSTANTS.con_n_Zero;
+   SET o_s_OracleCode = PK_LSDB_CONSTANTS.con_n_Zero;
+   SET o_s_ErrorMessage = PK_LSDB_CONSTANTS.con_n_Space; 
+   SET l_s_Modify_User_Body = PK_LSDB_EMAIL_CONTENT.o_s_Modify_User_Body;      
+   SET l_s_Modify_User_Subject = PK_LSDB_EMAIL_CONTENT.o_s_Modify_User_Subject;
+   SELECT LS120_ROLE_ID INTO l_s_Role_ID FROM LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UserId;
+   SELECT LS010_FIRSTNAME INTO l_s_First_Name FROM LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UserId;
+   SELECT LS010_EMAIL_ADDRESS INTO l_s_From_User_Email FROM  LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UpdtUserId;
+   SELECT LS120_ROLE_NAME INTO l_s_User_Role  FROM LSDB120_USER_ROLES
+   WHERE LS120_ROLE_ID = i_s_Role;
+   SET l_s_Modify_User_Body = REPLACE(l_s_Modify_User_Body,'<FN>',i_s_FirstName);
+   SET l_s_Modify_User_Body = REPLACE(l_s_Modify_User_Body,'<UR>',l_s_User_Role);
+   IF  i_s_FirstName   IS NOT NULL   THEN  
+      UPDATE LSDB010_EMD_USERS SET LS010_FIRSTNAME = IFNULL(i_s_FirstName,LS010_FIRSTNAME),LS010_LASTNAME = IFNULL(i_s_LastName,LS010_LASTNAME),
+      LS120_ROLE_ID = IFNULL(i_s_Role,LS120_ROLE_ID), 
+      LS010_EMAIL_ADDRESS = IFNULL(i_s_EmailId,LS010_EMAIL_ADDRESS),
+      LS010_LOC = IFNULL(i_s_Location,LS010_LOC),LS010_CONTACT_NUMBER = IFNULL(i_n_ContactNo,LS010_CONTACT_NUMBER), 
+      LS010_UPDT_USER_ID = i_s_UpdtUserId,
+      LS010_UPDT_DATE = CURRENT_TIMESTAMP WHERE LS010_USER_ID = i_s_UserId; 
+ELSE 
+      BEGIN 
+         DECLARE EXIT HANDLER FOR NOT FOUND
+         begin 
+            SET l_s_Prev_Logged_Date =  NULL;
+         end;
+         SELECT LS010_CURR_LOGGEDIN INTO l_s_Prev_Logged_Date FROM LSDB010_EMD_USERS  WHERE  LS010_USER_ID = i_s_UserId; 
+      END; 
+      UPDATE LSDB010_EMD_USERS SET LS010_PREV_LOGGEDIN = l_s_Prev_Logged_Date WHERE  LS010_USER_ID = i_s_UserId; 
+      COMMIT;
+   END IF;
+   IF i_s_Role <> l_s_Role_ID AND  i_s_Role <> 'DSBD' AND  i_s_EmailId IS NOT NULL THEN 
+      INSERT INTO LSDB180_EMAIL_LOG(LS180_EMAIL_SEQ_NO,LS180_EMAIL_FROM_X, LS180_EMAIL_TO_X, LS180_EMAIL_SUBJECT_X, LS180_EMAIL_BODY_X, LS180_EMAIL_SENT_FLAG, LS180_EMAIL_TS, LS180_UPDT_USER_ID, LS180_UPDT_DATE) VALUES (NEXTVAL('SEQ_EMAIL'),l_s_From_User_Email, i_s_EmailId, l_s_Modify_User_Subject, l_s_Modify_User_Body, 'N', CURRENT_TIMESTAMP, i_s_UpdtUserId, CURRENT_TIMESTAMP);
+   END IF; 
+END

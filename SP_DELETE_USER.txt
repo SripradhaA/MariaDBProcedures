@@ -1,0 +1,42 @@
+CREATE DEFINER=`root`@`localhost` PROCEDURE `SP_DELETE_USER`(IN `i_s_UserId` VARCHAR(10), IN `i_s_UpdtUserId` VARCHAR(10))
+BEGIN
+   DECLARE l_s_1058_User_Exists_Flag VARCHAR(1);
+   DECLARE l_s_To_User_Email VARCHAR(40);
+   DECLARE l_s_From_User_Email VARCHAR(40);
+   DECLARE l_s_Delete_User_Body LONGTEXT;
+   DECLARE l_s_Delete_User_Subject VARCHAR(4000);
+   DECLARE l_s_First_Name CHAR(50);
+   DECLARE SEQ_EMAIL DOUBLE;
+   DECLARE SEQ_MAX DOUBLE;
+   SET l_s_1058_User_Exists_Flag='N';
+   SET SEQ_EMAIL=0;
+   SET SEQ_MAX=0;   
+   SET l_s_Delete_User_Body     = PK_LSDB_EMAIL_CONTENT.o_s_Delete_User_Body;
+   SET l_s_Delete_User_Subject  = PK_LSDB_EMAIL_CONTENT.o_s_Delete_User_Subject;
+
+   BEGIN      
+      begin 
+         SET l_s_1058_User_Exists_Flag = 'N';
+      end;
+      SELECT DISTINCT('Y') INTO l_s_1058_User_Exists_Flag FROM LSDB916_1058_USER_LIST A,LSDB900_1058_DETAILS B WHERE (UPPER(TRIM(A.LS010_USER_ID))) = UPPER(TRIM(i_s_UserId)) OR (UPPER(TRIM(B.LS010_USER_ID))) = UPPER(TRIM(i_s_UserId));
+   END;
+   IF l_s_1058_User_Exists_Flag = 'N' THEN
+      BEGIN         
+SELECT LS010_EMAIL_ADDRESS INTO l_s_From_User_Email FROM  LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UpdtUserId AND   LS120_ROLE_ID <> 'DSBD';
+      END;
+      BEGIN         
+SELECT LS010_EMAIL_ADDRESS INTO l_s_To_User_Email FROM  LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UserId AND LS120_ROLE_ID <> 'DSBD';
+      END;
+      BEGIN         
+SELECT LS010_FIRSTNAME INTO l_s_First_Name FROM LSDB010_EMD_USERS WHERE LS010_USER_ID = i_s_UserId AND LS120_ROLE_ID <> 'DSBD';
+      END;
+      SET l_s_Delete_User_Body = REPLACE(l_s_Delete_User_Body,'<FN>',l_s_First_Name);
+      DELETE B  from LSDB011_EMAIL_SUBSCRIPTIONS B WHERE  B.LS010_USER_ID = i_s_UserId;
+      DELETE a  from LSDB010_EMD_USERS A  WHERE A.LS010_USER_ID = i_s_UserId;
+      SELECT MAX(LS180_EMAIL_SEQ_NO) INTO SEQ_EMAIL FROM LSDB180_EMAIL_LOG ;
+      SET SEQ_MAX = SEQ_EMAIL+1;      
+       IF  l_s_To_User_Email IS NOT NULL THEN
+          INSERT INTO LSDB180_EMAIL_LOG(LS180_EMAIL_SEQ_NO,LS180_EMAIL_FROM_X, LS180_EMAIL_TO_X, LS180_EMAIL_SUBJECT_X, LS180_EMAIL_BODY_X, LS180_EMAIL_SENT_FLAG, LS180_EMAIL_TS, LS180_UPDT_USER_ID, LS180_UPDT_DATE)
+ VALUES(NEXTVAL('SEQ_EMAIL'),l_s_From_User_Email, l_s_To_User_Email, l_s_Delete_User_Subject, l_s_Delete_User_Body, 'N', CURRENT_TIMESTAMP, i_s_UpdtUserId, CURRENT_TIMESTAMP);
+     END IF;
+END
